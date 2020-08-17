@@ -1,0 +1,112 @@
+---
+title: "R Shiny Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: bootstrap
+    orientation: columns
+    logo: 
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+
+# Libraries
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(plotly) #for interactive
+
+# Import data
+# Keep strings as factors for downstream row/column faceting
+survey.dataset <- read.csv("dataset-shiny.csv", stringsAsFactors = T)
+
+```
+
+
+Regression
+================================
+Inputs {.sidebar}
+-----------------------------------------------------------------------
+
+
+###
+```{r}
+sliderInput('sampleSize', 'Filter: Health Score',
+            min=1, max= 110, 
+            value=c(-1,110), step=1)
+
+checkboxInput('jitter', 'Jitter', value = TRUE)
+checkboxInput('smooth', 'Linear Fit', value = TRUE)
+checkboxInput('color_age', "Color Health Score", value = TRUE)
+
+selectInput('x', 'X', names(survey.dataset))
+selectInput('y', 'Y', names(survey.dataset), names(survey.dataset)[[2]])
+
+
+selectInput('facet_row', 'Facet Row',
+            c(None='.', names(survey.dataset[sapply(survey.dataset, is.factor)])))
+selectInput('facet_col', 'Facet Column',
+            c(None='.', names(survey.dataset[sapply(survey.dataset, is.factor)])))
+```
+
+Outputs
+-----------------------------------------------------------------------
+
+###
+
+```{r}
+
+# Update data based on slider parameters from dashboard
+dataset <- reactive({
+  dataset <- subset(survey.dataset[survey.dataset[input$x]!=-1&survey.dataset[input$y]!=-1,], Health.Score>input$sampleSize[1]&Health.Score<input$sampleSize[2])
+  
+})
+
+
+renderPlot({
+   p <- ggplot(dataset(), aes_string(x=input$x, y=input$y)) + geom_point(cex = 3, alpha = 0.6) +
+     theme_linedraw() + ggtitle(paste("Number of samples considered: ", nrow(dataset())))
+   
+  
+  facets <- paste(input$facet_row, '~', input$facet_col)
+  
+  if (facets != '. ~ .')
+    p <- p + facet_grid(facets)
+  
+  if (input$jitter)
+    p <- p + geom_jitter(cex = 3, alpha = 0.6)
+  if (input$smooth)
+    p <- p + geom_smooth(method = "lm", se = F)  +
+        stat_cor(method = "pearson",label.y.npc = "top", col = "blue", cex = 5)
+  if (input$color_age)
+    p <- p + aes(color= Health.Score) +
+        ggplot2::scale_colour_binned(breaks = c(0, 20, 40, 60, 80, 100),
+                                     type = "gradient")
+  
+  print(p)
+
+})
+
+```
+
+### Table of Raw Data (De-identified) {data-height=200}
+```{r}
+renderTable(
+  expr = dataset(), rownames = FALSE, colnames = TRUE,
+  spacing = 'xs', striped = TRUE, bordered = TRUE, hover = TRUE
+)
+```
+
+About
+================================
+##
+```
+This is an example interactive dashboard for exploring mixed tabular data (i.e. continuous and categorical variables). Data can be filtered on a continuous feature (e.g. weight, GPA, etc.) and visualized in real-time for quickly identifying statistically meaningful relationships across multiple variables. 
+
+This dashboard was built using R Shiny, ggplot, tidyverse, flexdashboard, and plotly.
+
+Data plotted are fictional and for demonstration purposes only.
+```
+
+###
+Created by Edward Ruiz in 2020. https://github.com/Ed2uiz/RShiny-GLM
